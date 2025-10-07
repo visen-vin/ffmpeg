@@ -259,10 +259,9 @@ app.post('/api/merge-with-audio', upload.single('audio'), async (req, res) => {
         ];
         await runFFmpegCommand(command);
 
-        const finalUrl = `${req.protocol}://${req.get('host')}/outputs/${finalOutputName}`;
         res.status(200).json({
             message: 'Video created successfully!',
-            url: finalUrl
+            url: finalOutputName
         });
 
     } catch (error) {
@@ -287,6 +286,34 @@ app.post('/api/merge-with-audio', upload.single('audio'), async (req, res) => {
             });
         });
     }
+});
+
+// --- API Endpoint 4: Download file from outputs by filename ---
+app.get('/api/download', (req, res) => {
+    const { filename } = req.query;
+    if (!filename) {
+        return res.status(400).json({ error: 'Missing filename query parameter.' });
+    }
+
+    // Basic path traversal protection: only allow plain filenames
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return res.status(400).json({ error: 'Invalid filename.' });
+    }
+
+    const filePath = path.join(OUTPUTS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found in outputs.' });
+    }
+
+    // Force download with the provided filename
+    res.download(filePath, filename, (err) => {
+        if (err) {
+            console.error('Download error:', err);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to download file.' });
+            }
+        }
+    });
 });
 
 app.listen(port, () => {
