@@ -152,7 +152,7 @@ app.post('/api/image-to-video', upload.single('image'), async (req, res) => {
         
         res.status(200).json({
             message: 'Step 1 complete. Video created from image.',
-            outputFilename: outputPath
+            outputFilename: outputFilename
         });
 
     } catch (error) {
@@ -259,9 +259,10 @@ app.post('/api/merge-with-audio', upload.single('audio'), async (req, res) => {
         ];
         await runFFmpegCommand(command);
 
+        const finalUrl = `${req.protocol}://${req.get('host')}/outputs/${finalOutputName}`;
         res.status(200).json({
             message: 'Video created successfully!',
-            url: finalOutputName
+            url: finalUrl
         });
 
     } catch (error) {
