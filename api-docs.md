@@ -67,19 +67,38 @@ Adds a text overlay to a previously generated video.
 | Name            | Type   | In   | Description                                     | Required |
 | :-------------- | :----- | :--- | :---------------------------------------------- | :------- |
 | `inputFilename` | String | Body | The filename of the video to add the overlay to. | Yes      |
-| `text`          | String | Body | The text content to overlay on the video.       | Yes      |
+| `text`          | String | Body | The main text content to overlay on the video.       | Yes      |
+| `attribution`   | String | Body | Optional attribution text, styled differently.  | No       |
 | `id`            | String | Body | An optional ID to use for the output filename. If not provided, a new one will be generated. | No       |
+
+### Text Overlay Features
+
+The text overlay has the following features:
+
+*   **Full-Width Background**: The text overlay has a semi-transparent background that spans the full width of the video.
+*   **Custom Padding**: The text within the overlay has 10% padding on the left and 15% padding on the right, which can be adjusted in the source code.
+*   **Text Wrapping**: The text automatically wraps to multiple lines to fit within the padded area.
 
 ### Sample Request
 
 **Without providing an ID (generates a new one):**
 
 ```bash
+# With only text
 curl -X POST http://localhost:3000/api/add-text-overlay \
   -H "Content-Type: application/json" \
   -d '{
         "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
         "text": "Hello, World!"
+      }'
+
+# With text and attribution
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -H "Content-Type: application/json" \
+  -d '{
+        "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
+        "text": "Just like we change old clothes and wear new ones, the soul also leaves an old body behind and takes a new one. Life does not end it simply changes form",
+        "attribution": "-Bhagavad Gita 2.22-"
       }'
 ```
 
@@ -91,6 +110,7 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
   -d '{
         "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
         "text": "Hello, World!",
+        "attribution": "-Bhagavad Gita 2.22-",
         "id": "a1b2c3d4e5f6a7b8"
       }'
 ```
