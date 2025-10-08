@@ -16,7 +16,7 @@ const upload = multer({ storage });
 
 require('./routes/imageToVideo')(app, upload);
 require('./routes/addTextOverlay')(app, upload);
-require('./routes/mergeWithAudio')(app, upload);
+require('./routes/mergeWithAudio')(app);
 require('./routes/download')(app);
 
 app.listen(PORT, () => {
