@@ -94,18 +94,17 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 
 ## 3. Step 3: Merge with Audio
 
-Merges an audio file with a video from a previous step.
+merges a video from a previous step with a default audio file.
 
 -   **Endpoint**: `/api/merge-with-audio`
 -   **Method**: `POST`
--   **Content-Type**: `multipart/form-data`
+-   **Content-Type**: `application/json`
 
 ### Parameters
 
 | Name    | Type   | In   | Description                                                              | Required |
 | :------ | :----- | :--- | :----------------------------------------------------------------------- | :------- |
 | `id`    | String | Body | The unique ID from the video creation step (Step 1 or 2).                | Yes      |
-| `audio` | File   | Body | The audio file to merge with the video.                                  | Yes      |
 | `step`  | String | Body | The step number of the input video (`'1'` or `'2'`). Defaults to `'1'`. | No       |
 
 ### Sample Request
@@ -113,9 +112,11 @@ Merges an audio file with a video from a previous step.
 ```bash
 # Using the output from Step 1
 curl -X POST http://localhost:3000/api/merge-with-audio \
-  -F "id=a1b2c3d4e5f6a7b8" \
-  -F "audio=@/path/to/your/audio.mp3" \
-  -F "step=1"
+  -H "Content-Type: application/json" \
+  -d '{
+        "id": "a1b2c3d4e5f6a7b8",
+        "step": "1"
+      }'
 ```
 
 ### Sample Success Response (200 OK)
