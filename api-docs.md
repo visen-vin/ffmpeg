@@ -135,14 +135,14 @@ curl -X POST http://localhost:3000/api/merge-with-audio \
 
 Provides a direct download link for any generated video file.
 
--   **Endpoint**: `/api/download/:filename`
+-   **Endpoint**: `/api/download`
 -   **Method**: `GET`
 
 ### Parameters
 
-| Name       | In   | Description                               | Required |
-| :--------- | :--- | :---------------------------------------- | :------- |
-| `filename` | Path | The full filename of the video to download. | Yes      |
+| Name       | In    | Description                               | Required |
+| :--------- | :---- | :---------------------------------------- | :------- |
+| `filename` | Query | The full filename of the video to download. | Yes      |
 
 ### Sample Request
 
@@ -150,7 +150,7 @@ Use the `outputFilename` from any of the previous steps.
 
 ```bash
 # Download the final video from Step 3
-curl -o "final_video.mp4" http://localhost:3000/api/download/step3-a1b2c3d4e5f6a7b8.mp4
+curl -o "final_video.mp4" "http://localhost:3000/api/download?filename=step3-a1b2c3d4e5f6a7b8.mp4"
 ```
 
 ### Sample Success Response
