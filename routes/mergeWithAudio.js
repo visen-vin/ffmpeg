@@ -1,18 +1,19 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { OUTPUTS_DIR, ROOT_DIR } = require('../utils/config');
 const { runFFmpegCommand } = require('../utils/ffmpeg');
 
 module.exports = (app) => {
   app.post('/api/merge-with-audio', async (req, res) => {
-    const { id, step = '1' } = req.body;
-    if (!id) return res.status(400).json({ error: 'Missing id.' });
+    const { inputFilename, id: providedId } = req.body;
+    if (!inputFilename) return res.status(400).json({ error: 'Missing inputFilename.' });
 
-    const inputFilename = `step${step}-${id}.mp4`;
     const inputPath = path.join(OUTPUTS_DIR, inputFilename);
     if (!fs.existsSync(inputPath)) return res.status(404).json({ error: `Input video not found: ${inputFilename}` });
 
     const audioPath = path.join(ROOT_DIR, 'test_files', 'audio1.mp3');
+    const id = providedId || crypto.randomBytes(8).toString('hex');
     const outputFilename = `step3-${id}.mp4`;
     const outputPath = path.join(OUTPUTS_DIR, outputFilename);
 

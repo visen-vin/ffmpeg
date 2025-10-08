@@ -10,10 +10,10 @@ All API endpoints are relative to the base URL where the service is running (e.g
 
 The typical workflow involves chaining the APIs in sequence:
 
-1.  **Step 1: Image to Video**: Create a base video from an image. This step generates a unique **ID**.
-2.  **Step 2: Add Text Overlay (Optional)**: Add text to the video generated in the previous step, using its ID.
-3.  **Step 3: Merge with Audio**: Add an audio track to the video from either Step 1 or Step 2, using its ID.
-4.  **Download**: Use the `/api/download/:filename` endpoint to retrieve any of the generated video files.
+1.  **Step 1: Image to Video**: Create a base video from an image. This step returns an `outputFilename`.
+2.  **Step 2: Add Text Overlay (Optional)**: Add text to a video by providing its `inputFilename`.
+3.  **Step 3: Merge with Audio**: Add a default audio track to a video by providing its `inputFilename`.
+4.  **Download**: Use the `/api/download` endpoint to retrieve any of the generated video files.
 
 ---
 
@@ -64,19 +64,34 @@ Adds a text overlay to a previously generated video.
 
 ### Parameters
 
-| Name | Type   | In   | Description                                       | Required |
-| :--- | :----- | :--- | :------------------------------------------------ | :------- |
-| `id` | String | Body | The unique ID returned from the previous step.    | Yes      |
-| `text`| String | Body | The text content to overlay on the video.       | Yes      |
+| Name            | Type   | In   | Description                                     | Required |
+| :-------------- | :----- | :--- | :---------------------------------------------- | :------- |
+| `inputFilename` | String | Body | The filename of the video to add the overlay to. | Yes      |
+| `text`          | String | Body | The text content to overlay on the video.       | Yes      |
+| `id`            | String | Body | An optional ID to use for the output filename. If not provided, a new one will be generated. | No       |
 
 ### Sample Request
+
+**Without providing an ID (generates a new one):**
 
 ```bash
 curl -X POST http://localhost:3000/api/add-text-overlay \
   -H "Content-Type: application/json" \
   -d '{
-        "id": "a1b2c3d4e5f6a7b8",
+        "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
         "text": "Hello, World!"
+      }'
+```
+
+**Providing an ID (to maintain a consistent workflow):**
+
+```bash
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -H "Content-Type: application/json" \
+  -d '{
+        "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
+        "text": "Hello, World!",
+        "id": "a1b2c3d4e5f6a7b8"
       }'
 ```
 
@@ -85,8 +100,8 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 ```json
 {
   "message": "Step 2 complete. Text overlay added.",
-  "id": "a1b2c3d4e5f6a7b8",
-  "outputFilename": "step2-a1b2c3d4e5f6a7b8.mp4"
+  "id": "b2c3d4e5f6a7b8c9",
+  "outputFilename": "step2-b2c3d4e5f6a7b8c9.mp4"
 }
 ```
 
@@ -94,7 +109,7 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 
 ## 3. Step 3: Merge with Audio
 
-merges a video from a previous step with a default audio file.
+Merges a video from a previous step with a default audio file.
 
 -   **Endpoint**: `/api/merge-with-audio`
 -   **Method**: `POST`
@@ -102,20 +117,33 @@ merges a video from a previous step with a default audio file.
 
 ### Parameters
 
-| Name    | Type   | In   | Description                                                              | Required |
-| :------ | :----- | :--- | :----------------------------------------------------------------------- | :------- |
-| `id`    | String | Body | The unique ID from the video creation step (Step 1 or 2).                | Yes      |
-| `step`  | String | Body | The step number of the input video (`'1'` or `'2'`). Defaults to `'1'`. | No       |
+| Name            | Type   | In   | Description                                     | Required |
+| :-------------- | :----- | :--- | :---------------------------------------------- | :------- |
+| `inputFilename` | String | Body | The filename of the video to merge with audio. | Yes      |
+| `id`            | String | Body | An optional ID to use for the output filename. If not provided, a new one will be generated. | No       |
 
 ### Sample Request
 
+**Without providing an ID (generates a new one):**
+
 ```bash
-# Using the output from Step 1
+# Using the output from Step 2
 curl -X POST http://localhost:3000/api/merge-with-audio \
   -H "Content-Type: application/json" \
   -d '{
-        "id": "a1b2c3d4e5f6a7b8",
-        "step": "1"
+        "inputFilename": "step2-b2c3d4e5f6a7b8c9.mp4"
+      }'
+```
+
+**Providing an ID (to maintain a consistent workflow):**
+
+```bash
+# Using the output from Step 2 and the ID from Step 1
+curl -X POST http://localhost:3000/api/merge-with-audio \
+  -H "Content-Type: application/json" \
+  -d '{
+        "inputFilename": "step2-a1b2c3d4e5f6a7b8.mp4",
+        "id": "a1b2c3d4e5f6a7b8"
       }'
 ```
 
@@ -124,8 +152,8 @@ curl -X POST http://localhost:3000/api/merge-with-audio \
 ```json
 {
   "message": "Step 3 complete. Audio merged.",
-  "id": "a1b2c3d4e5f6a7b8",
-  "outputFilename": "step3-a1b2c3d4e5f6a7b8.mp4"
+  "id": "c3d4e5f6a7b8c9d0",
+  "outputFilename": "step3-c3d4e5f6a7b8c9d0.mp4"
 }
 ```
 

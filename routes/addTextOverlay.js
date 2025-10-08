@@ -1,14 +1,18 @@
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const { OUTPUTS_DIR } = require('../utils/config');
 const { runFFmpegCommand } = require('../utils/ffmpeg');
 
 module.exports = (app) => {
   app.post('/api/add-text-overlay', async (req, res) => {
-    const { id, text } = req.body;
-    if (!id || !text) return res.status(400).json({ error: 'Missing id or text.' });
+    const { inputFilename, text, id: providedId } = req.body;
+    if (!inputFilename || !text) return res.status(400).json({ error: 'Missing inputFilename or text.' });
 
-    const inputFilename = `step1-${id}.mp4`;
     const inputPath = path.join(OUTPUTS_DIR, inputFilename);
+    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: `Input video not found: ${inputFilename}` });
+
+    const id = providedId || crypto.randomBytes(8).toString('hex');
     const outputFilename = `step2-${id}.mp4`;
     const outputPath = path.join(OUTPUTS_DIR, outputFilename);
 
