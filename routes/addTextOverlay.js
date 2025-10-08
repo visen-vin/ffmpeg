@@ -39,30 +39,32 @@ module.exports = (app) => {
     const textImage = path.join(OUTPUTS_DIR, `text-overlay-${id}.png`);
 
     try {
+      const videoWidth = 1080;
+      const sideMargin = videoWidth * 0.15;
+      const textAreaWidth = videoWidth - (2 * sideMargin);
+      const fontSize = Math.round(textAreaWidth / 20);
+      const maxCharsPerLine = Math.floor(textAreaWidth / (fontSize * 0.6));
+
       // 1. Wrap the text that now contains real emojis
-      const wrappedText = wrapText(textWithEmojis, 35);
+      const wrappedText = wrapText(textWithEmojis, maxCharsPerLine);
       
       if (wrappedText.length === 0) {
         return res.status(400).json({ error: 'Text content is empty after processing.' });
       }
       
-      // ... (The rest of your geometry calculation code remains the same)
-      const lastLineY = 1200 + ((wrappedText.length - 1) * 60);
-      const attributionY = lastLineY + 80;
-      const padding = 30;
-      const mainTextTop = 1200 - 50;
+      const lastLineY = 1200 + ((wrappedText.length - 1) * (fontSize + 10));
+      const attributionY = lastLineY + (fontSize + 30);
+      const padding = Math.round(fontSize * 0.6);
+      const mainTextTop = 1200 - fontSize;
       const rectY = mainTextTop - padding;
       const rectHeight = (attributionY - mainTextTop) + padding * 1.5;
-      const leftPadding = 1080 * 0.12;
-      const rightPadding = 1080 * 0.15;
-      const textAreaWidth = 1080 - leftPadding - rightPadding;
-      const textCenterX = leftPadding + (textAreaWidth / 2);
+      const textCenterX = sideMargin + (textAreaWidth / 2);
       const rectX = 0;
-      const rectWidth = 1080;
+      const rectWidth = videoWidth;
 
       // 3. Map wrapped text to <tspan> elements, sanitizing each line
       const textLines = wrappedText.map((line, index) => {
-        const y = 1200 + (index * 60);
+        const y = 1200 + (index * (fontSize + 10));
         return `<tspan x="${textCenterX}" y="${y}">${sanitizeForSvg(line)}</tspan>`;
       }).join('');
       
@@ -72,8 +74,8 @@ module.exports = (app) => {
       const textSvg = `
         <svg width="1080" height="1920">
           <style>
-            .main-text { font-family: "Roboto", "Noto Color Emoji"; font-size: 50px; font-weight: bold; fill: white; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8)); }
-            .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: 35px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
+            .main-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${fontSize}px; font-weight: bold; fill: white; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8)); }
+            .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${Math.round(fontSize * 0.7)}px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
           </style>
           <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="rgba(0,0,0,0.4)" />
           <text class="main-text">
