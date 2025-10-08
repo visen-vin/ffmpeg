@@ -17,7 +17,12 @@ module.exports = (app, upload) => {
     const finalOutputPath = path.join(OUTPUTS_DIR, finalOutputName);
     try {
       await runFFmpegCommand(['-i', inputVideoPath, '-i', audioPath, '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-y', finalOutputPath]);
-      res.status(200).json({ message: 'Step 3 complete. Video merged with audio.', outputFilename: finalOutputName });
+      // Return the generated file itself as the response
+      if (!fs.existsSync(finalOutputPath)) {
+        return res.status(500).json({ error: 'Output file not created.' });
+      }
+      // Stream the file to the client with a download prompt and correct filename
+      res.download(finalOutputPath, finalOutputName);
     } catch (e) {
       res.status(500).json({ error: 'Failed to merge audio.', details: e.message });
     }
