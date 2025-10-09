@@ -93,14 +93,26 @@ module.exports = (app) => {
       
       await sharp(Buffer.from(textSvg)).toFile(textImage);
 
+      console.log('📝 Starting text overlay processing...');
+
       await new Promise((resolve, reject) => {
         ffmpeg()
           .input(inputPath)
           .input(textImage)
           .complexFilter('[0:v][1:v] overlay=(W-w)/2:(H-h)/2')
           .outputOptions(['-c:a copy'])
-          .on('end', resolve)
-          .on('error', (err) => reject(new Error(`ffmpeg failed: ${err.message}`)))
+          .on('progress', (progress) => {
+            const percent = Math.round(progress.percent || 0);
+            console.log(`📝 Text Overlay Processing: ${percent}% complete`);
+          })
+          .on('end', () => {
+            console.log('✅ Text overlay processing completed successfully');
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error('❌ Text overlay processing failed:', err.message);
+            reject(new Error(`ffmpeg failed: ${err.message}`));
+          })
           .save(outputPath);
       });
 

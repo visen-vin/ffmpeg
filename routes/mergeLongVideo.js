@@ -55,8 +55,18 @@ module.exports = (app, upload) => {
             '-r 30',        // Frame rate
             '-shortest'     // Stop when shortest input ends (audio length)
           ])
-          .on('end', resolve)
-          .on('error', (err) => reject(new Error(`ffmpeg failed: ${err.message}`)))
+          .on('progress', (progress) => {
+            const percent = Math.round(progress.percent || 0);
+            console.log(`🎬 Long Video Processing: ${percent}% complete`);
+          })
+          .on('end', () => {
+            console.log('✅ Long video processing completed successfully');
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error('❌ Long video processing failed:', err.message);
+            reject(new Error(`ffmpeg failed: ${err.message}`));
+          })
           .save(outputPath);
       });
 

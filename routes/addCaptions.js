@@ -63,6 +63,8 @@ module.exports = (app) => {
         throw new Error('SRT file was not created.');
       }
 
+      console.log('📝 Starting captions processing...');
+
       await new Promise((resolve, reject) => {
         ffmpeg()
           .input(videoPath)
@@ -76,11 +78,16 @@ module.exports = (app) => {
             '-crf 23',
             '-preset veryfast',
           ])
+          .on('progress', (progress) => {
+            const percent = Math.round(progress.percent || 0);
+            console.log(`📝 Captions Processing: ${percent}% complete`);
+          })
           .on('error', (err) => {
-            console.error('Error processing video with ffmpeg:', err);
+            console.error('❌ Captions processing failed:', err);
             reject(err);
           })
           .on('end', () => {
+            console.log('✅ Captions processing completed successfully');
             resolve();
           })
           .save(outputPath);

@@ -11,7 +11,7 @@ module.exports = (app, upload) => {
     const id = crypto.randomBytes(8).toString("hex");
     const imagePath = req.file.path;
     const duration = Number(req.body.duration) || DEFAULTS.duration;
-    const mode = req.body.mode || "shiver";
+    const mode = req.body.mode || "kenburns";
     const width = 1080;
     const height = 1920;
     const { framerate } = DEFAULTS;
@@ -57,6 +57,8 @@ module.exports = (app, upload) => {
 
       const vf = vf_chains.join(',');
 
+      console.log('🖼️ Starting image to video conversion...');
+      
       await runFFmpegCommand([
         "-loop", "1",
         "-framerate", framerate,
@@ -66,7 +68,13 @@ module.exports = (app, upload) => {
         "-t", String(duration),
         "-pix_fmt", "yuv420p",
         "-y", outputPath
-      ]);
+      ], (timeMs) => {
+        const currentTime = timeMs / 1000000; // Convert microseconds to seconds
+        const percent = Math.min(100, Math.round((currentTime / duration) * 100));
+        console.log(`🖼️ Image to Video Processing: ${percent}% complete`);
+      });
+      
+      console.log('✅ Image to video conversion completed successfully');
       
       res.status(200).json({ 
         message: 'Step 1 complete. Video created from image.', 
