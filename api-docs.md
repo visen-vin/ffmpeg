@@ -334,3 +334,67 @@ curl -X DELETE "http://localhost:3000/api/cleanup"
   "details": "Permission denied"
 }
 ```
+
+---
+
+## 8. Add Background Music
+
+**Endpoint:** `POST /api/add-background-music`
+
+**Description:** Adds looped background music to a video. The background audio file is automatically looped to match the full duration of the input video.
+
+**Method:** POST
+
+**Content-Type:** multipart/form-data
+
+### Parameters
+
+- `video` (file, required): The video file to add background music to
+- `id` (string, optional): Custom identifier for the output file
+- `volume` (number, optional): Background music volume (0.0 to 1.0, default: 0.3)
+
+### Sample Request
+
+```bash
+# Add background music to a video
+curl -X POST "http://localhost:3000/api/add-background-music" \
+  -F "video=@/path/to/your/video.mp4" \
+  -F "id=my-video-with-music" \
+  -F "volume=0.5"
+```
+
+### Sample Success Response (200 OK)
+
+```json
+{
+  "message": "Background music added successfully.",
+  "id": "my-video-with-music",
+  "outputFilename": "bg-music-my-video-with-music.mp4",
+  "videoDuration": 45.2,
+  "backgroundVolume": "0.5"
+}
+```
+
+### Error Responses
+
+**400 Bad Request - No video file:**
+```json
+{
+  "error": "No video file uploaded."
+}
+```
+
+**404 Not Found - Background audio missing:**
+```json
+{
+  "error": "Background audio file not found."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "Failed to add background music",
+  "details": "FFmpeg processing error details"
+}
+```

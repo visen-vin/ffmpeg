@@ -21,6 +21,7 @@ require('./routes/mergeLongVideo')(app, upload);
 require('./routes/addThumbnail')(app);
 require('./routes/download')(app);
 require('./routes/cleanup')(app);
+require('./routes/addBackgroundMusic')(app, upload);
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running on http://localhost:${PORT}`);
