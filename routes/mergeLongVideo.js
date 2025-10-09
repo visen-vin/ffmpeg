@@ -4,16 +4,18 @@ const crypto = require('crypto');
 const ffmpeg = require('fluent-ffmpeg');
 const { OUTPUTS_DIR } = require('../utils/config');
 
-module.exports = (app) => {
-  app.post('/api/long-video', async (req, res) => {
+module.exports = (app, upload) => {
+  app.post('/api/long-video', upload.single('audio'), async (req, res) => {
+    // Check if audio file is uploaded or audioFilename is provided
+    const uploadedAudio = req.file;
     const { videoFilename, audioFilename } = req.body;
 
-    if (!audioFilename) {
-      return res.status(400).json({ error: 'Missing audioFilename.' });
+    if (!uploadedAudio && !audioFilename) {
+      return res.status(400).json({ error: 'Missing audio file. Please upload an audio file or provide audioFilename.' });
     }
 
     // Use default video file if not provided
-    const defaultVideoFile = 'videoplaybacklong.mp4';
+    const defaultVideoFile = 'bgvideolong.mp4';
     const actualVideoFilename = videoFilename || defaultVideoFile;
     
     // Check if using custom video file or default from test_files
@@ -21,13 +23,17 @@ module.exports = (app) => {
       ? path.join(__dirname, '../videos', videoFilename)
       : path.join(__dirname, '../test_files', defaultVideoFile);
     
-    const audioPath = path.join(__dirname, '../test_files', audioFilename);
+    // Use uploaded audio file or fallback to audioFilename from test_files
+    const audioPath = uploadedAudio 
+      ? uploadedAudio.path 
+      : path.join(__dirname, '../test_files', audioFilename);
 
     if (!fs.existsSync(videoPath)) {
       return res.status(404).json({ error: `Input video not found: ${actualVideoFilename}` });
     }
     if (!fs.existsSync(audioPath)) {
-      return res.status(404).json({ error: `Input audio not found: ${audioFilename}` });
+      const audioSource = uploadedAudio ? 'uploaded audio file' : `audio file: ${audioFilename}`;
+      return res.status(404).json({ error: `Input ${audioSource} not found.` });
     }
 
     const id = crypto.randomBytes(8).toString('hex');

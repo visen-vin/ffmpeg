@@ -17,7 +17,7 @@ const upload = multer({ storage });
 require('./routes/imageToVideo')(app, upload);
 require('./routes/addTextOverlay')(app, upload);
 require('./routes/mergeWithAudio')(app);
-require('./routes/mergeLongVideo')(app);
+require('./routes/mergeLongVideo')(app, upload);
 require('./routes/addThumbnail')(app);
 require('./routes/addCaptions')(app);
 

@@ -179,7 +179,74 @@ curl -X POST http://localhost:3000/api/merge-with-audio \
 
 ---
 
-## 4. Download File
+## 4. Long Video Creation
+
+Creates a YouTube-style long video (1920x1080) by looping a default video to match the duration of an audio file.
+
+-   **Endpoint**: `/api/long-video`
+-   **Method**: `POST`
+-   **Content-Type**: `multipart/form-data` (for binary upload) or `application/json` (for filename reference)
+
+### Features
+
+*   **Default Video**: Uses `bgvideolong.mp4` as the default background video
+*   **YouTube Dimensions**: Outputs video in 1920x1080 resolution with proper scaling and padding
+*   **Audio Synchronization**: Loops the video to match the exact duration of the audio file
+*   **Dual Input Methods**: Supports both binary file upload and filename reference
+
+### Parameters (Binary Upload Method)
+
+| Name    | Type | In   | Description                           | Required |
+| :------ | :--- | :--- | :------------------------------------ | :------- |
+| `audio` | File | Body | The audio file to sync with the video | Yes      |
+
+### Parameters (Filename Reference Method)
+
+| Name            | Type   | In   | Description                                    | Required |
+| :-------------- | :----- | :--- | :--------------------------------------------- | :------- |
+| `audioFilename` | String | Body | The filename of the audio file in test_files  | Yes      |
+| `videoFilename` | String | Body | Optional custom video file (defaults to bgvideolong.mp4) | No |
+
+### Sample Requests
+
+**Binary File Upload (Recommended):**
+
+```bash
+curl -X POST http://localhost:3000/api/long-video \
+  -F "audio=@/path/to/your/audio.mp3"
+```
+
+**Filename Reference (Backward Compatible):**
+
+```bash
+curl -X POST http://localhost:3000/api/long-video \
+  -H "Content-Type: application/json" \
+  -d '{
+        "audioFilename": "1.mp3"
+      }'
+
+# With custom video file
+curl -X POST http://localhost:3000/api/long-video \
+  -H "Content-Type: application/json" \
+  -d '{
+        "audioFilename": "1.mp3",
+        "videoFilename": "custom-video.mp4"
+      }'
+```
+
+### Sample Success Response (200 OK)
+
+```json
+{
+  "message": "Successfully created long video with looped playback matching audio duration.",
+  "id": "d8860bce359e85de",
+  "outputFilename": "long-video-d8860bce359e85de.mp4"
+}
+```
+
+---
+
+## 5. Download File
 
 Provides a direct download link for any generated video file.
 
@@ -199,6 +266,9 @@ Use the `outputFilename` from any of the previous steps.
 ```bash
 # Download the final video from Step 3
 curl -o "final_video.mp4" "http://localhost:3000/api/download?filename=step3-a1b2c3d4e5f6a7b8.mp4"
+
+# Download a long video
+curl -o "my_long_video.mp4" "http://localhost:3000/api/download?filename=long-video-d8860bce359e85de.mp4"
 ```
 
 ### Sample Success Response
