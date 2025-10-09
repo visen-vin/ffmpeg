@@ -28,8 +28,50 @@ module.exports = (app, upload) => {
     try {
       console.log('🎵 Starting background music processing...');
       
-      await runFFmpegCommand(
-        [
+      // First, check if the input video has audio
+      let hasAudio = false;
+      try {
+        const probeResult = await runFFmpegCommand([
+          '-v', 'error',
+          '-select_streams', 'a:0',
+          '-show_entries', 'stream=codec_type',
+          '-of', 'csv=p=0',
+          videoPath
+        ], null, true); // Allow errors for probe
+        
+        hasAudio = probeResult && probeResult.trim() === 'audio';
+      } catch (error) {
+        // If probe fails, assume no audio
+        hasAudio = false;
+      }
+      
+      console.log(`🔍 Video has audio: ${hasAudio}`);
+      
+      let ffmpegArgs;
+      
+      if (hasAudio) {
+        // Mix original audio with background music
+        console.log('🎵 Mixing original audio with background music...');
+        ffmpegArgs = [
+          '-i', videoPath,
+          '-stream_loop', '-1',
+          '-i', backgroundAudioPath,
+          '-filter_complex', `[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=0,volume=1:${volume}[mixed_audio]`,
+          '-map', '0:v',
+          '-map', '[mixed_audio]',
+          '-c:v', 'libx264',
+          '-c:a', 'aac',
+          '-preset', 'medium',
+          '-crf', '23',
+          '-movflags', '+faststart',
+          '-shortest',
+          '-y',
+          outputPath
+        ];
+      } else {
+        // Video has no audio, just add background music
+        console.log('🎵 Adding background music to video without audio...');
+        ffmpegArgs = [
           '-i', videoPath,
           '-stream_loop', '-1',
           '-i', backgroundAudioPath,
@@ -44,7 +86,10 @@ module.exports = (app, upload) => {
           '-shortest',
           '-y',
           outputPath
-        ],
+        ];
+      }
+      
+      await runFFmpegCommand(ffmpegArgs,
         (timeMs) => {
           // Estimate progress based on processing time
           const estimatedDuration = 30000; // 30 seconds estimated

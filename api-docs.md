@@ -341,7 +341,11 @@ curl -X DELETE "http://localhost:3000/api/cleanup"
 
 **Endpoint:** `POST /api/add-background-music`
 
-**Description:** Adds looped background music to a video. The background audio file is automatically looped to match the full duration of the input video.
+**Description:** Adds looped background music to a video with intelligent audio handling. The system automatically detects if the input video has existing audio and handles it appropriately:
+- **Videos with existing audio**: Mixes the original audio with background music, preserving both tracks
+- **Videos without audio**: Simply adds the background music as the audio track
+
+The background audio file is automatically looped to match the full duration of the input video.
 
 **Method:** POST
 
