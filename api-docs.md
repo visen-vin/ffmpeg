@@ -212,7 +212,7 @@ Creates a YouTube-style long video (1920x1080) by looping a default video to mat
 **Binary File Upload (Recommended):**
 
 ```bash
-curl -X POST http://localhost:3000/api/long-video \
+curl -X POST http://178.16.137.62:3000/api/long-video \
   -F "audio=@/path/to/your/audio.mp3"
 ```
 
@@ -274,3 +274,63 @@ curl -o "my_long_video.mp4" "http://localhost:3000/api/download?filename=long-vi
 ### Sample Success Response
 
 The server responds with the video file as a downloadable attachment.
+
+---
+
+## 6. Cleanup Temporary Files
+
+Removes all temporary files from the uploads and outputs directories to free up disk space.
+
+-   **Endpoint**: `/api/cleanup`
+-   **Method**: `DELETE`
+
+### Parameters
+
+No parameters required.
+
+### Sample Request
+
+```bash
+# Clean all temporary files
+curl -X DELETE "http://localhost:3000/api/cleanup"
+```
+
+### Sample Success Response (200 OK)
+
+```json
+{
+  "message": "Cleanup completed",
+  "deletedFiles": [
+    "uploads/1760030962580-1.mp3",
+    "uploads/1760031029807-2.mp3",
+    "outputs/long-video-72a3824dcbcc38c6.mp4",
+    "outputs/step2-7098dabf9ec1e738.mp4"
+  ],
+  "deletedCount": 4
+}
+```
+
+### Sample Response with Errors (200 OK)
+
+```json
+{
+  "message": "Cleanup completed with some errors",
+  "deletedFiles": [
+    "uploads/file1.mp3",
+    "outputs/video1.mp4"
+  ],
+  "deletedCount": 2,
+  "errors": [
+    "Failed to delete outputs/locked-file.mp4: EBUSY: resource busy or locked"
+  ]
+}
+```
+
+### Error Response (500 Internal Server Error)
+
+```json
+{
+  "error": "Cleanup failed",
+  "details": "Permission denied"
+}
+```
