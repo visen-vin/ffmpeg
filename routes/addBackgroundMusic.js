@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { UPLOADS_DIR, OUTPUTS_DIR } = require('../utils/config');
+const { UPLOADS_DIR, OUTPUTS_DIR, ROOT_DIR } = require('../utils/config');
 const { runFFmpegCommand } = require('../utils/ffmpeg');
 
 module.exports = (app, upload) => {
@@ -13,7 +13,7 @@ module.exports = (app, upload) => {
     }
 
     const videoPath = req.file.path;
-    const backgroundAudioPath = '/Users/vin/Desktop/ffmpeg-yt/test_files/bgaudio.mp3';
+    const backgroundAudioPath = path.join(ROOT_DIR, 'test_files', 'bgaudio.mp3');
     
     // Check if background audio exists
     if (!fs.existsSync(backgroundAudioPath)) {
