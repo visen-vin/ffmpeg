@@ -60,18 +60,21 @@ Adds a text overlay to a previously generated video.
 
 -   **Endpoint**: `/api/add-text-overlay`
 -   **Method**: `POST`
--   **Content-Type**: `application/json`
+-   **Content-Type**: `application/json` or `multipart/form-data`
 
 ### Parameters
 
 | Name                | Type   | In   | Description                                                                                 | Required |
 | :------------------ | :----- | :--- | :------------------------------------------------------------------------------------------ | :------- |
-| `inputFilename`     | String | Body | The filename of the video to add the overlay to.                                            | Yes      |
+| `inputFilename`     | String | Body | The filename of the video to add the overlay to.                                            | Yes (JSON) / No (multipart) |
+| `video`             | File   | Form | Uploaded video file (field name: `video`).                                                  | Yes (multipart) / No (JSON) |
 | `text`              | String | Body | The main text content to overlay on the video.                                              | Yes      |
 | `attribution`       | String | Body | Optional attribution text, styled differently.                                              | No       |
 | `id`                | String | Body | Optional ID to use for the output filename. If not provided, a new one will be generated.   | No       |
 | `style`             | String | Body | Overlay style. `reference` = white top bar; any other value = translucent dark overlay. Default: `reference`. | No |
 | `visibleLastSeconds`| Number | Body | Overlay timing. Show only during the last N seconds. `0` (or omitted) = full duration.      | No       |
+| `compact`           | Boolean | Body | If `true`, returns a minimal response containing only `output.outputFilename`. | No |
+| `returnFile`        | Boolean | Body | If `true`, the API returns the rendered MP4 bytes with `Content-Type: video/mp4`. | No |
 
 ### Text Overlay Features
 
@@ -81,11 +84,11 @@ Adds a text overlay to a previously generated video.
 - Emoji support: Shortcodes like `:rocket:` and `:smile:` are converted to real emoji.
 - HTML safety: HTML is sanitized and not rendered. Tags like `<b>` and `<br>` appear as text.
 - Wrapping: Text auto-wraps by words to fit the available width.
-- Timing: Use `visibleLastSeconds` to show the overlay only in the final N seconds; `0` shows it for the entire video.
+- Timing: Overlay is always visible for the full video duration. The `visibleLastSeconds` field is accepted for backward compatibility but currently ignored.
 
-### Sample Request
+### Sample Requests
 
-**Without providing an ID (generates a new one):**
+**JSON (without providing an ID; generates a new one):**
 
 ```bash
 # With only text (default style, full duration)
@@ -131,9 +134,55 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 {
   "message": "Step 2 complete. Text overlay added.",
   "id": "b2c3d4e5f6a7b8c9",
-  "outputFilename": "step2-b2c3d4e5f6a7b8c9.mp4"
+  "outputFilename": "step2-b2c3d4e5f6a7b8c9.mp4",
+  "metadataFile": "step2-b2c3d4e5f6a7b8c9.json",
+  "overlay": {
+    "style": "reference",
+    "visibleLastSeconds": 0,
+    "text": "Just like we change old clothes and...",
+    "attribution": "Bhagavad Gita 2.22",
+    "video": { "width": 1080, "height": 1920, "durationSec": 7 },
+    "layout": {
+      "fontSize": 48,
+      "lineSpacing": 58,
+      "mainTextTop": 160,
+      "attributionY": 503,
+      "rectY": 0,
+      "rectHeight": 546.5,
+      "sideMargin": 86.4,
+      "textAreaWidth": 907.2
+    },
+    "input": {
+      "source": "uploaded",
+      "path": "/absolute/path/to/uploads/filename.mp4",
+      "originalName": "filename.mp4"
+    },
+    "output": { "outputFilename": "step2-b2c3d4e5f6a7b8c9.mp4" }
+  }
 }
 ```
+
+### Compact Success Response (200 OK)
+
+Returned when the request includes `compact=true` (JSON boolean or multipart form field).
+
+```json
+{
+  "output": {
+    "outputFilename": "step2-b2c3d4e5f6a7b8c9.mp4",
+    "outputUrl": "/outputs/step2-b2c3d4e5f6a7b8c9.mp4"
+  }
+}
+```
+
+### Notes on Multipart vs JSON
+
+- When uploading with `multipart/form-data`, include the video file under the `video` field and include the other fields (`text`, `attribution`, `style`, `visibleLastSeconds`, `id`) as regular form fields.
+- When using `application/json`, provide `inputFilename` to reference a video already present in the `outputs/` directory.
+- The overlay output includes a sidecar JSON file (`metadataFile`) containing all relevant parameters for reproducibility.
+- Compact response: Add `compact=true` to the request body (JSON) or as a form field when using multipart to receive only the `output.outputFilename`.
+- Timing: The overlay currently renders for the full duration of the video; `visibleLastSeconds` is ignored.
+- Inline file: Add `returnFile=true` to stream the video file directly in the response with `Content-Type: video/mp4`. Use `curl -o` or your HTTP client to save the file.
 
 ---
 
@@ -466,4 +515,38 @@ curl -X POST "http://localhost:3000/api/add-background-music" \
   "error": "Failed to add background music",
   "details": "FFmpeg processing error details"
 }
+```
+**Multipart upload (uploading a video file and providing an ID):**
+
+```bash
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -F "video=@outputs/plain-6fd5b62c8c2bfd25.mp4" \
+  -F "text=Just like we change old clothes and wear new ones..." \
+  -F "attribution=Bhagavad Gita 2.22" \
+  -F "style=reference" \
+  -F "id=6fd5b62c8c2bfd25"
+```
+
+**Multipart upload with compact response:**
+
+```bash
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -F "video=@outputs/plain-6fd5b62c8c2bfd25.mp4" \
+  -F "text=Just like we change old clothes and wear new ones..." \
+  -F "attribution=Bhagavad Gita 2.22" \
+  -F "style=reference" \
+  -F "id=6fd5b62c8c2bfd25" \
+  -F "compact=true"
+```
+
+**Multipart upload returning the video file directly:**
+
+```bash
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -F "video=@outputs/plain-6fd5b62c8c2bfd25.mp4" \
+  -F "text=Just like we change old clothes and wear new ones..." \
+  -F "style=reference" \
+  -F "id=6fd5b62c8c2bfd25" \
+  -F "returnFile=true" \
+  -o step2-inline.mp4
 ```

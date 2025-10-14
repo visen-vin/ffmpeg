@@ -17,20 +17,32 @@ const sanitizeForSvg = (str) => {
     .replace(/'/g, '&apos;');
 };
 
-module.exports = (app) => {
-  app.post('/api/add-text-overlay', async (req, res) => {
-    let { inputFilename, text, attribution, id: providedId, style, visibleLastSeconds } = req.body; // Use let
-    if (!inputFilename || !text) {
-      return res.status(400).json({ error: 'Missing inputFilename or text.' });
+module.exports = (app, upload) => {
+  app.post('/api/add-text-overlay', upload.single('video'), async (req, res) => {
+    let { inputFilename, text, attribution, id: providedId, style, visibleLastSeconds, compact, returnFile } = req.body; // Use let
+    if (!text) {
+      return res.status(400).json({ error: 'Missing text.' });
     }
 
     // ✨ CHANGE: Convert shortcodes to actual emojis
     const textWithEmojis = text ? emoji.emojify(text) : '';
     const attributionWithEmojis = attribution ? emoji.emojify(attribution) : '';
 
-    const inputPath = path.join(OUTPUTS_DIR, inputFilename);
-    if (!fs.existsSync(inputPath)) {
-      return res.status(404).json({ error: `Input video not found: ${inputFilename}` });
+    // Determine input video source: uploaded file or outputs directory
+    let inputPath = '';
+    let inputSource = '';
+    if (req.file && req.file.path) {
+      inputPath = req.file.path;
+      inputSource = 'uploaded';
+    } else {
+      if (!inputFilename) {
+        return res.status(400).json({ error: 'Missing inputFilename when no video file is uploaded.' });
+      }
+      inputPath = path.join(OUTPUTS_DIR, inputFilename);
+      inputSource = 'outputs';
+      if (!fs.existsSync(inputPath)) {
+        return res.status(404).json({ error: `Input video not found: ${inputFilename}` });
+      }
     }
 
     const id = providedId || crypto.randomBytes(8).toString('hex');
@@ -49,7 +61,19 @@ module.exports = (app) => {
     });
 
     try {
-      const videoWidth = 1080;
+      // Probe input video to get dimensions and duration
+      let videoWidth = 1080;
+      let videoHeight = 1920;
+      let durationSec = 0;
+      try {
+        const probe = await ffprobeAsync(inputPath);
+        const vstream = (probe?.streams || []).find(s => s.codec_type === 'video') || (probe?.streams || [])[0];
+        videoWidth = vstream?.width || videoWidth;
+        videoHeight = vstream?.height || videoHeight;
+        durationSec = parseFloat(probe?.format?.duration || '0');
+      } catch (e) {
+        // Use defaults
+      }
       const sideMargin = requestedStyle === 'reference' ? videoWidth * 0.08 : videoWidth * 0.15;
       const textAreaWidth = videoWidth - (2 * sideMargin);
       const fontSize = requestedStyle === 'reference' ? Math.round(textAreaWidth / 19) : Math.round(textAreaWidth / 20);
@@ -64,7 +88,11 @@ module.exports = (app) => {
       
       // Positioning varies by style
       const lineSpacing = fontSize + 10;
-      const mainTextTop = requestedStyle === 'reference' ? 160 : (1200 - fontSize);
+      const baseRefTop = 160;
+      const baseDarkTop = 1200;
+      const mainTextTop = requestedStyle === 'reference' 
+        ? Math.round(baseRefTop * (videoHeight / 1920)) 
+        : Math.round((baseDarkTop * (videoHeight / 1920)) - fontSize);
       const lastLineY = mainTextTop + ((wrappedText.length - 1) * lineSpacing) + fontSize; // baseline of last line
       // Revert: attribution gap returns to prior behavior (fontSize + 24)
       const attributionY = lastLineY + (fontSize + 15);
@@ -85,7 +113,7 @@ module.exports = (app) => {
 
       // 4. Construct the final SVG string
       const textSvg = `
-        <svg width="1080" height="1920">
+        <svg width="${videoWidth}" height="${videoHeight}">
           <style>
             ${requestedStyle === 'reference' ? `
               .main-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${fontSize}px; font-weight: normal; fill: black; text-anchor: middle; }
@@ -113,21 +141,8 @@ module.exports = (app) => {
 
       console.log('📝 Starting text overlay processing...');
 
-      // Determine overlay timing (visible only during last N seconds if requested)
+      // Overlay timing: always visible for the full duration
       let enableClause = '';
-      if (showLast > 0) {
-        let durationSec = 0;
-        try {
-          const probe = await ffprobeAsync(inputPath);
-          durationSec = parseFloat(probe?.format?.duration || '0');
-        } catch (e) {
-          durationSec = 0;
-        }
-        if (durationSec > 0) {
-          const start = Math.max(0, durationSec - showLast);
-          enableClause = `:enable='gte(t,${start.toFixed(3)})'`;
-        }
-      }
 
       await new Promise((resolve, reject) => {
         ffmpeg()
@@ -150,10 +165,61 @@ module.exports = (app) => {
           .save(outputPath);
       });
 
+      // Build overlay metadata and write sidecar JSON for reproducibility/debugging
+      const overlayMeta = {
+        style: requestedStyle,
+        visibleLastSeconds: showLast,
+        text: textWithEmojis,
+        attribution: attributionWithEmojis,
+        video: { width: videoWidth, height: videoHeight, durationSec },
+        layout: { fontSize, lineSpacing, mainTextTop, attributionY, rectY, rectHeight, sideMargin, textAreaWidth },
+        input: { source: inputSource, path: inputPath, inputFilename: req.file ? undefined : inputFilename, originalName: req.file ? req.file.originalname : undefined },
+        output: { outputFilename }
+      };
+      const metadataFile = path.join(OUTPUTS_DIR, `step2-${id}.json`);
+      try {
+        fs.writeFileSync(metadataFile, JSON.stringify(overlayMeta, null, 2));
+      } catch (e) {
+        console.warn('⚠️ Failed to write overlay metadata file:', e.message);
+      }
+
+      // Support returning the video bytes directly if requested
+      const wantReturnFile = returnFile === true || returnFile === 'true';
+      if (wantReturnFile) {
+        try {
+          res.setHeader('Content-Type', 'video/mp4');
+          res.setHeader('Content-Disposition', `inline; filename="${outputFilename}"`);
+          const stream = fs.createReadStream(outputPath);
+          stream.on('error', (err) => {
+            console.error('❌ Failed to stream output file:', err.message);
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Failed to stream output file.' });
+            } else {
+              res.end();
+            }
+          });
+          return stream.pipe(res);
+        } catch (e) {
+          return res.status(500).json({ error: 'Failed to return video file.', details: e.message });
+        }
+      }
+
+      // Support compact response shape if requested
+      const wantCompact = compact === true || compact === 'true';
+      const outputUrl = `/outputs/${outputFilename}`;
+      if (wantCompact) {
+        return res.status(200).json({
+          output: { outputFilename, outputUrl }
+        });
+      }
+
       res.status(200).json({ 
         message: 'Step 2 complete. Text overlay added.', 
         id: id,
-        outputFilename: outputFilename 
+        outputFilename: outputFilename,
+        outputUrl: outputUrl,
+        metadataFile: `step2-${id}.json`,
+        overlay: overlayMeta
       });
 
     } catch (e) {
