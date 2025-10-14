@@ -360,7 +360,40 @@ curl -X POST http://localhost:3000/api/long-video \
 
 ---
 
-## 5. Download File
+## 5. Upload Video for Future Use
+
+Stores an uploaded video into the `outputs/` directory and returns only the stored filename. Use this filename later with other APIs (e.g., `add-text-overlay` via `inputFilename`) or download via `/api/download`.
+
+-   **Endpoint**: `/api/upload-video`
+-   **Method**: `POST`
+-   **Content-Type**: `multipart/form-data`
+
+### Parameters
+
+| Name    | Type | In   | Description                                 | Required |
+| :------ | :--- | :--- | :------------------------------------------ | :------- |
+| `video` | File | Body | The video file to store for future use.     | Yes      |
+| `id`    | String | Body | Optional identifier used in stored filename. | No       |
+
+### Sample Request
+
+```bash
+curl -X POST http://localhost:3000/api/upload-video \
+  -F "video=@/path/to/your/video.mp4" \
+  -F "id=my-video"
+```
+
+### Sample Success Response (200 OK)
+
+```json
+{
+  "outputFilename": "uploaded-my-video.mp4"
+}
+```
+
+---
+
+## 6. Download File
 
 Provides a direct download link for any generated video file.
 
@@ -391,7 +424,7 @@ The server responds with the video file as a downloadable attachment.
 
 ---
 
-## 6. Cleanup Temporary Files
+## 7. Cleanup Temporary Files
 
 Removes all temporary files from the uploads and outputs directories to free up disk space.
 
@@ -545,6 +578,7 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 curl -X POST http://localhost:3000/api/add-text-overlay \
   -F "video=@outputs/plain-6fd5b62c8c2bfd25.mp4" \
   -F "text=Just like we change old clothes and wear new ones..." \
+  -F "attribution=Bhagavad Gita 2.22" \
   -F "style=reference" \
   -F "id=6fd5b62c8c2bfd25" \
   -F "returnFile=true" \
