@@ -19,7 +19,7 @@ const sanitizeForSvg = (str) => {
 
 module.exports = (app) => {
   app.post('/api/add-text-overlay', async (req, res) => {
-    let { inputFilename, text, attribution, id: providedId } = req.body; // Use let
+    let { inputFilename, text, attribution, id: providedId, style, visibleLastSeconds } = req.body; // Use let
     if (!inputFilename || !text) {
       return res.status(400).json({ error: 'Missing inputFilename or text.' });
     }
@@ -37,12 +37,22 @@ module.exports = (app) => {
     const outputFilename = `step2-${id}.mp4`;
     const outputPath = path.join(OUTPUTS_DIR, outputFilename);
     const textImage = path.join(OUTPUTS_DIR, `text-overlay-${id}.png`);
+    const requestedStyle = (style || 'reference').toLowerCase();
+    const showLast = Number(visibleLastSeconds) || 0;
+
+    // Helper: ffprobe wrapped in a promise to get video duration
+    const ffprobeAsync = (filePath) => new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(filePath, (err, data) => {
+        if (err) return reject(err);
+        resolve(data);
+      });
+    });
 
     try {
       const videoWidth = 1080;
-      const sideMargin = videoWidth * 0.15;
+      const sideMargin = requestedStyle === 'reference' ? videoWidth * 0.08 : videoWidth * 0.15;
       const textAreaWidth = videoWidth - (2 * sideMargin);
-      const fontSize = Math.round(textAreaWidth / 20);
+      const fontSize = requestedStyle === 'reference' ? Math.round(textAreaWidth / 19) : Math.round(textAreaWidth / 20);
       const maxCharsPerLine = Math.floor(textAreaWidth / (fontSize * 0.6));
 
       // 1. Wrap the text that now contains real emojis
@@ -52,19 +62,22 @@ module.exports = (app) => {
         return res.status(400).json({ error: 'Text content is empty after processing.' });
       }
       
-      const lastLineY = 1200 + ((wrappedText.length - 1) * (fontSize + 10));
-      const attributionY = lastLineY + (fontSize + 30);
+      // Positioning varies by style
+      const lineSpacing = fontSize + 10;
+      const mainTextTop = requestedStyle === 'reference' ? 160 : (1200 - fontSize);
+      const lastLineY = mainTextTop + ((wrappedText.length - 1) * lineSpacing) + fontSize; // baseline of last line
+      // Revert: attribution gap returns to prior behavior (fontSize + 24)
+      const attributionY = lastLineY + (fontSize + 15);
       const padding = Math.round(fontSize * 0.6);
-      const mainTextTop = 1200 - fontSize;
-      const rectY = mainTextTop - padding;
-      const rectHeight = (attributionY - mainTextTop) + padding * 1.5;
+      const rectY = requestedStyle === 'reference' ? 0 : (mainTextTop - padding);
+      const rectHeight = (attributionY - mainTextTop) + padding * 1.5 + (requestedStyle === 'reference' ? mainTextTop : 0);
       const textCenterX = sideMargin + (textAreaWidth / 2);
       const rectX = 0;
       const rectWidth = videoWidth;
 
       // 3. Map wrapped text to <tspan> elements, sanitizing each line
       const textLines = wrappedText.map((line, index) => {
-        const y = 1200 + (index * (fontSize + 10));
+        const y = mainTextTop + (index * (lineSpacing));
         return `<tspan x="${textCenterX}" y="${y}">${sanitizeForSvg(line)}</tspan>`;
       }).join('');
       
@@ -74,16 +87,21 @@ module.exports = (app) => {
       const textSvg = `
         <svg width="1080" height="1920">
           <style>
-            .main-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${fontSize}px; font-weight: bold; fill: white; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8)); }
-            .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${Math.round(fontSize * 0.7)}px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
+            ${requestedStyle === 'reference' ? `
+              .main-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${fontSize}px; font-weight: normal; fill: black; text-anchor: middle; }
+              .attr-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${Math.round(fontSize * 0.8)}px; font-weight: bold; fill: #D64A27; text-anchor: middle; }
+            ` : `
+              .main-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${fontSize}px; font-weight: bold; fill: white; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8)); }
+              .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${Math.round(fontSize * 0.7)}px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
+            `}
           </style>
-          <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="rgba(0,0,0,0.4)" />
+          <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${requestedStyle === 'reference' ? 'white' : 'rgba(0,0,0,0.4)'}" />
           <text class="main-text">
             ${textLines}
           </text>
           ${sanitizedAttribution ? `
           <text class="attr-text" x="${textCenterX}" y="${attributionY}">
-            -${sanitizedAttribution}-
+            ${requestedStyle === 'reference' ? `${sanitizeForSvg(attributionWithEmojis)}` : `-${sanitizeForSvg(attributionWithEmojis)}-`}
           </text>
           ` : ''}
         </svg>
@@ -95,11 +113,27 @@ module.exports = (app) => {
 
       console.log('📝 Starting text overlay processing...');
 
+      // Determine overlay timing (visible only during last N seconds if requested)
+      let enableClause = '';
+      if (showLast > 0) {
+        let durationSec = 0;
+        try {
+          const probe = await ffprobeAsync(inputPath);
+          durationSec = parseFloat(probe?.format?.duration || '0');
+        } catch (e) {
+          durationSec = 0;
+        }
+        if (durationSec > 0) {
+          const start = Math.max(0, durationSec - showLast);
+          enableClause = `:enable='gte(t,${start.toFixed(3)})'`;
+        }
+      }
+
       await new Promise((resolve, reject) => {
         ffmpeg()
           .input(inputPath)
           .input(textImage)
-          .complexFilter('[0:v][1:v] overlay=(W-w)/2:(H-h)/2')
+          .complexFilter(`[0:v][1:v] overlay=(W-w)/2:(H-h)/2${enableClause}`)
           .outputOptions(['-c:a copy'])
           .on('progress', (progress) => {
             const percent = Math.round(progress.percent || 0);

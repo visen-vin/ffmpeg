@@ -64,41 +64,49 @@ Adds a text overlay to a previously generated video.
 
 ### Parameters
 
-| Name            | Type   | In   | Description                                     | Required |
-| :-------------- | :----- | :--- | :---------------------------------------------- | :------- |
-| `inputFilename` | String | Body | The filename of the video to add the overlay to. | Yes      |
-| `text`          | String | Body | The main text content to overlay on the video.       | Yes      |
-| `attribution`   | String | Body | Optional attribution text, styled differently.  | No       |
-| `id`            | String | Body | An optional ID to use for the output filename. If not provided, a new one will be generated. | No       |
+| Name                | Type   | In   | Description                                                                                 | Required |
+| :------------------ | :----- | :--- | :------------------------------------------------------------------------------------------ | :------- |
+| `inputFilename`     | String | Body | The filename of the video to add the overlay to.                                            | Yes      |
+| `text`              | String | Body | The main text content to overlay on the video.                                              | Yes      |
+| `attribution`       | String | Body | Optional attribution text, styled differently.                                              | No       |
+| `id`                | String | Body | Optional ID to use for the output filename. If not provided, a new one will be generated.   | No       |
+| `style`             | String | Body | Overlay style. `reference` = white top bar; any other value = translucent dark overlay. Default: `reference`. | No |
+| `visibleLastSeconds`| Number | Body | Overlay timing. Show only during the last N seconds. `0` (or omitted) = full duration.      | No       |
 
 ### Text Overlay Features
 
-The text overlay has the following features:
-
-*   **Full-Width Background**: The text overlay has a semi-transparent background that spans the full width of the video.
-*   **Custom Padding**: The text within the overlay has 10% padding on the left and 15% padding on the right, which can be adjusted in the source code.
-*   **Text Wrapping**: The text automatically wraps to multiple lines to fit within the padded area.
+- Style options:
+  - `reference`: White full-width top bar with centered black quote and red attribution.
+  - Other values: Translucent dark overlay behind the text with bold white quote and orange attribution.
+- Emoji support: Shortcodes like `:rocket:` and `:smile:` are converted to real emoji.
+- HTML safety: HTML is sanitized and not rendered. Tags like `<b>` and `<br>` appear as text.
+- Wrapping: Text auto-wraps by words to fit the available width.
+- Timing: Use `visibleLastSeconds` to show the overlay only in the final N seconds; `0` shows it for the entire video.
 
 ### Sample Request
 
 **Without providing an ID (generates a new one):**
 
 ```bash
-# With only text
+# With only text (default style, full duration)
 curl -X POST http://localhost:3000/api/add-text-overlay \
   -H "Content-Type: application/json" \
   -d '{
         "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
-        "text": "Hello, World!"
+        "text": "Hello, World!",
+        "style": "reference",
+        "visibleLastSeconds": 0
       }'
 
-# With text and attribution
+# With text and attribution (show overlay only in last 3 seconds)
 curl -X POST http://localhost:3000/api/add-text-overlay \
   -H "Content-Type: application/json" \
   -d '{
         "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
         "text": "Just like we change old clothes and wear new ones, the soul also leaves an old body behind and takes a new one. Life does not end it simply changes form",
-        "attribution": "-Bhagavad Gita 2.22-"
+        "attribution": "Bhagavad Gita 2.22",
+        "style": "reference",
+        "visibleLastSeconds": 3
       }'
 ```
 
@@ -110,7 +118,9 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
   -d '{
         "inputFilename": "step1-a1b2c3d4e5f6a7b8.mp4",
         "text": "Hello, World!",
-        "attribution": "-Bhagavad Gita 2.22-",
+        "attribution": "Bhagavad Gita 2.22",
+        "style": "reference",
+        "visibleLastSeconds": 0,
         "id": "a1b2c3d4e5f6a7b8"
       }'
 ```
@@ -126,6 +136,61 @@ curl -X POST http://localhost:3000/api/add-text-overlay \
 ```
 
 ---
+
+## 7. Plain Background Video
+
+Generates a solid-color background video, useful for testing overlays and layouts.
+
+- **Endpoint**: `/api/plain-background`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+### Parameters
+
+| Name        | Type   | In   | Description                                                  | Required |
+| :---------- | :----- | :--- | :----------------------------------------------------------- | :------- |
+| `duration`  | Number | Body | Duration of the output in seconds (default: 7).             | No       |
+| `color`     | String | Body | Background color name or hex (e.g., `black`, `#FFFFFF`).    | No       |
+| `id`        | String | Body | Optional identifier for output filename.                    | No       |
+| `width`     | Number | Body | Video width in pixels (default: 1080).                      | No       |
+| `height`    | Number | Body | Video height in pixels (default: 1920).                     | No       |
+
+### Sample Request
+
+```bash
+# Create a 7-second black background video
+curl -X POST http://localhost:3000/api/plain-background \
+  -H "Content-Type: application/json" \
+  -d '{
+        "duration": 7,
+        "color": "black"
+      }'
+```
+
+### Sample Success Response (200 OK)
+
+```json
+{
+  "message": "Plain background video created successfully.",
+  "id": "6fd5b62c8c2bfd25",
+  "outputFilename": "plain-6fd5b62c8c2bfd25.mp4"
+}
+```
+
+### Follow-up: Apply an Overlay to the Plain Background
+
+```bash
+curl -X POST http://localhost:3000/api/add-text-overlay \
+  -H "Content-Type: application/json" \
+  -d '{
+        "inputFilename": "plain-6fd5b62c8c2bfd25.mp4",
+        "text": "Just like we change old clothes and wear new ones...",
+        "attribution": "Bhagavad Gita 2.22",
+        "style": "reference",
+        "visibleLastSeconds": 0,
+        "id": "6fd5b62c8c2bfd25"
+      }'
+```
 
 ## 3. Step 3: Merge with Audio
 

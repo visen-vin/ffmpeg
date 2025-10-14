@@ -22,6 +22,7 @@ require('./routes/addThumbnail')(app);
 require('./routes/download')(app);
 require('./routes/cleanup')(app);
 require('./routes/addBackgroundMusic')(app, upload);
+require('./routes/plainBackground')(app);
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running on http://localhost:${PORT}`);

@@ -22,8 +22,8 @@ module.exports = (app, upload) => {
       const preset = MODES[mode] || MODES.calm;
       const scale_w = Math.round(width * 1.5);
       const frames = duration * framerate;
-      const halfFrames = Math.floor(frames / 2);
-      const halfDuration = duration / 2;
+      const halfFrames = Math.floor(frames / 3);
+      const halfDuration = duration / 3;
       const baseEase = `1.05+0.20*(0.5-0.5*cos(PI*on/${frames}))`;
       const secondHalfBoost = `0.10*if(gt(on,${halfFrames}),(on-${halfFrames})/${halfFrames},0)`;
       const zoomExpr = `min(1.35,${baseEase}+${secondHalfBoost})`;
