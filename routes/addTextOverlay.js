@@ -49,6 +49,7 @@ module.exports = (app, upload) => {
     const outputFilename = `step2-${id}.mp4`;
     const outputPath = path.join(OUTPUTS_DIR, outputFilename);
     const textImage = path.join(OUTPUTS_DIR, `text-overlay-${id}.png`);
+    const bgImage = path.join(OUTPUTS_DIR, `bg-${id}.png`);
     const requestedStyle = (style || 'reference').toLowerCase();
     const showLast = Number(visibleLastSeconds) || 0;
 
@@ -74,8 +75,17 @@ module.exports = (app, upload) => {
       } catch (e) {
         // Use defaults
       }
-      const sideMargin = requestedStyle === 'reference' ? videoWidth * 0.08 : videoWidth * 0.15;
-      const textAreaWidth = videoWidth - (2 * sideMargin);
+      // 4K export option: preserve aspect ratio and upscale + pad to 4K canvas
+      const export4kFlagRaw = (req.body.output4k ?? req.body.export4k ?? req.body.scale ?? req.body.targetResolution ?? '').toString().toLowerCase();
+      const want4k = export4kFlagRaw === 'true' || export4kFlagRaw === '1' || export4kFlagRaw === 'yes' || export4kFlagRaw === '4k' || export4kFlagRaw === 'uhd' || export4kFlagRaw === '2160p';
+      const isVerticalSource = videoHeight >= videoWidth;
+      const targetWidth = want4k ? (isVerticalSource ? 2160 : 3840) : videoWidth;
+      const targetHeight = want4k ? (isVerticalSource ? 3840 : 2160) : videoHeight;
+      // Canvas used for overlay layout (text, header) should match the final output canvas
+      const canvasWidth = targetWidth;
+      const canvasHeight = targetHeight;
+      const sideMargin = requestedStyle === 'reference' ? canvasWidth * 0.08 : canvasWidth * 0.15;
+      const textAreaWidth = canvasWidth - (2 * sideMargin);
       const fontSize = requestedStyle === 'reference' ? Math.round(textAreaWidth / 19) : Math.round(textAreaWidth / 20);
       const attrFontSize = Math.round(fontSize * 0.8);
       const maxCharsPerLine = Math.floor(textAreaWidth / (fontSize * 0.6));
@@ -105,9 +115,10 @@ module.exports = (app, upload) => {
       // Header height will be computed from actual text block height later (capped at 32%)
       let headerHeight = 0;
       const mainTextTop = requestedStyle === 'reference'
-        ? Math.round(videoHeight * topPaddingRatio)
-        : Math.round((baseDarkTop * (videoHeight / 1920)) - fontSize);
-      const lastLineY = mainTextTop + ((lineCount ) * lineSpacing) + fontSize - 10; // approximate bottom of last line
+        ? Math.round(canvasHeight * topPaddingRatio)
+        : Math.round((baseDarkTop * (canvasHeight / 1920)) - fontSize);
+      // More accurate last line bottom: baseline of the last line plus font size
+      const lastLineY = mainTextTop + ((lineCount - 1) * lineSpacing) + fontSize;
       // Compact attribution gap (halved): decrease spacing between text and attribution
       const attrGap = Math.round(fontSize * 0.25);
       let attributionY = lastLineY + attrGap;
@@ -117,10 +128,12 @@ module.exports = (app, upload) => {
       if (requestedStyle === 'reference') {
         const textBottomMargin = Math.round(fontSize * 0.2);
         const attrBottomMargin = Math.round(attrFontSize * 0.4);
-        const bottomPaddingPx = Math.round(videoHeight * bottomPaddingRatio);
+        const bottomPaddingPx = Math.round(canvasHeight * bottomPaddingRatio);
         const headerHeightPxRaw = attributionY + attrBottomMargin + bottomPaddingPx; // include attribution and bottom padding
-        const maxHeaderPx = Math.round(videoHeight * 0.32);
+        const maxHeaderPx = Math.round(canvasHeight * 0.32);
         headerHeight = Math.min(headerHeightPxRaw, maxHeaderPx);
+        // Ensure even height to avoid YUV420 subsampling seam on the join line
+        if (headerHeight % 2 !== 0) headerHeight -= 1;
         // Clamp attribution to sit inside the header when capped
         attributionY = Math.min(attributionY, headerHeight - attrBottomMargin);
       }
@@ -129,7 +142,7 @@ module.exports = (app, upload) => {
         : (attributionY - mainTextTop) + padding * 1.5;
       const textCenterX = sideMargin + (textAreaWidth / 2);
       const rectX = 0;
-      const rectWidth = videoWidth;
+      const rectWidth = canvasWidth;
 
       // 3. Map wrapped text to <tspan> elements, sanitizing each line
       const textLines = linesToRender.map((line, index) => {
@@ -141,7 +154,7 @@ module.exports = (app, upload) => {
 
       // 4. Construct the final SVG string
       const textSvg = `
-        <svg width="${videoWidth}" height="${videoHeight}">
+        <svg width="${canvasWidth}" height="${canvasHeight}">
           <style>
             ${requestedStyle === 'reference' ? `
               .main-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${fontSize}px; font-weight: normal; fill: black; text-anchor: middle; }
@@ -151,7 +164,7 @@ module.exports = (app, upload) => {
               .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${Math.round(fontSize * 0.7)}px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
             `}
           </style>
-          <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${requestedStyle === 'reference' ? 'white' : 'rgba(0,0,0,0.4)'}" />
+          <rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" fill="${requestedStyle === 'reference' ? 'white' : 'rgba(0,0,0,0.4)'}" shape-rendering="crispEdges" />
           <text class="main-text">
             ${textLines}
           </text>
@@ -166,6 +179,15 @@ module.exports = (app, upload) => {
       // --- The rest of the function remains the same ---
       
       await sharp(Buffer.from(textSvg)).toFile(textImage);
+      // Create a solid black background PNG to avoid relying on lavfi
+      await sharp({
+        create: {
+          width: canvasWidth,
+          height: canvasHeight,
+          channels: 3,
+          background: { r: 0, g: 0, b: 0 }
+        }
+      }).png().toFile(bgImage);
 
       console.log('📝 Starting text overlay processing...');
 
@@ -173,22 +195,39 @@ module.exports = (app, upload) => {
       let enableClause = '';
 
       await new Promise((resolve, reject) => {
-        // When using the 'reference' style, push the video content down by the
-        // computed header height so the video starts at the bottom of the overlay.
-        // We do this by cropping off the bottom "headerHeight" pixels and then
-        // padding them back on the top as black, which preserves the final canvas
-        // size while creating a visual top margin equal to the overlay height.
-        const cropPadChain = requestedStyle === 'reference'
-          ? `[0:v]crop=${videoWidth}:${Math.max(1, videoHeight - headerHeight)}:0:0,` +
-            `pad=${videoWidth}:${videoHeight}:0:${headerHeight}:black[vidBase];` +
-            `[vidBase][1:v]overlay=(W-w)/2:(H-h)/2${enableClause}`
-          : `[0:v][1:v]overlay=(W-w)/2:(H-h)/2${enableClause}`;
+        // Build filter chain based on whether we are exporting to a 4K canvas.
+        // We always preserve aspect ratio and avoid stretching. For 4K, we
+        // scale with high-quality filter, pad to the exact 4K size, then push
+        // the video down by the overlay headerHeight before compositing.
+        let filterChain = '';
+        if (want4k) {
+          // Composite approach: build a black canvas, overlay the scaled video at y=headerHeight,
+          // then overlay the text PNG at the top. This guarantees a pixel-perfect join with no seam.
+          filterChain = `[0:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];` +
+                        `[2:v][scaled]overlay=(W-w)/2:${headerHeight}[vidBase];` +
+                        `[vidBase][1:v]overlay=0:0${enableClause}`;
+        } else {
+          // Original canvas: composite on black canvas, overlay video at header offset, then text
+          filterChain = requestedStyle === 'reference'
+            ? `[2:v][0:v]overlay=(W-w)/2:${headerHeight}[vidBase];` +
+              `[vidBase][1:v]overlay=0:0${enableClause}`
+            : `[0:v][1:v]overlay=(W-w)/2:(H-h)/2${enableClause}`;
+        }
 
         ffmpeg()
           .input(inputPath)
           .input(textImage)
-          .complexFilter(cropPadChain)
-          .outputOptions(['-c:a copy'])
+          // Add a generated black background PNG as a third input
+          .input(bgImage)
+          .complexFilter(filterChain)
+          .videoCodec('libx264')
+          .outputOptions([
+            '-c:a copy',
+            '-preset slow',
+            '-crf 17',
+            '-pix_fmt yuv420p',
+            '-movflags +faststart'
+          ])
           .on('progress', (progress) => {
             const percent = Math.round(progress.percent || 0);
             console.log(`📝 Text Overlay Processing: ${percent}% complete`);
@@ -211,6 +250,7 @@ module.exports = (app, upload) => {
         text: textWithEmojis,
         attribution: attributionWithEmojis,
         video: { width: videoWidth, height: videoHeight, durationSec },
+        target: want4k ? { width: targetWidth, height: targetHeight } : undefined,
         layout: { fontSize, lineSpacing, mainTextTop, attributionY, rectY, rectHeight, sideMargin, textAreaWidth, headerHeight },
         input: { source: inputSource, path: inputPath, inputFilename: req.file ? undefined : inputFilename, originalName: req.file ? req.file.originalname : undefined },
         output: { outputFilename }
@@ -267,6 +307,9 @@ module.exports = (app, upload) => {
     } finally {
       if (fs.existsSync(textImage)) {
         fs.unlinkSync(textImage);
+      }
+      if (fs.existsSync(bgImage)) {
+        fs.unlinkSync(bgImage);
       }
     }
   });
