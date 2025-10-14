@@ -80,31 +80,52 @@ module.exports = (app, upload) => {
       const maxCharsPerLine = Math.floor(textAreaWidth / (fontSize * 0.6));
 
       // 1. Wrap the text that now contains real emojis
-      const wrappedText = wrapText(textWithEmojis, maxCharsPerLine);
+      let wrappedText = wrapText(textWithEmojis, maxCharsPerLine);
       
       if (wrappedText.length === 0) {
         return res.status(400).json({ error: 'Text content is empty after processing.' });
       }
       
+      // Enforce a maximum of 5 lines; append ellipsis to the last line if truncated
+      const MAX_LINES = 5;
+      let linesToRender = wrappedText.slice(0, MAX_LINES);
+      if (wrappedText.length > MAX_LINES) {
+        const lastIdx = MAX_LINES - 1;
+        linesToRender[lastIdx] = `${linesToRender[lastIdx]}…`;
+      }
+      const lineCount = linesToRender.length;
+      
       // Positioning varies by style
       const lineSpacing = fontSize + 10;
-      const baseRefTop = 160;
       const baseDarkTop = 1200;
-      const mainTextTop = requestedStyle === 'reference' 
-        ? Math.round(baseRefTop * (videoHeight / 1920)) 
+      // For 'reference' (white) style, add a safe top padding of 15% of video height
+      const topPaddingRatio = 0.10;
+      // Header height will be computed from actual text block height later (capped at 32%)
+      let headerHeight = 0;
+      const mainTextTop = requestedStyle === 'reference'
+        ? Math.round(videoHeight * topPaddingRatio)
         : Math.round((baseDarkTop * (videoHeight / 1920)) - fontSize);
-      const lastLineY = mainTextTop + ((wrappedText.length - 1) * lineSpacing) + fontSize; // baseline of last line
+      const lastLineY = mainTextTop + ((lineCount - 1) * lineSpacing) + fontSize; // approximate bottom of last line
       // Revert: attribution gap returns to prior behavior (fontSize + 24)
       const attributionY = lastLineY + (fontSize + 15);
       const padding = Math.round(fontSize * 0.6);
+      // Keep white bar anchored at the very top; only text gets top padding
       const rectY = requestedStyle === 'reference' ? 0 : (mainTextTop - padding);
-      const rectHeight = (attributionY - mainTextTop) + padding * 1.5 + (requestedStyle === 'reference' ? mainTextTop : 0);
+      if (requestedStyle === 'reference') {
+        const textBottomMargin = Math.round(fontSize * 0.2);
+        const headerHeightPxRaw = lastLineY + textBottomMargin; // includes top padding via mainTextTop
+        const maxHeaderPx = Math.round(videoHeight * 0.32);
+        headerHeight = Math.min(headerHeightPxRaw, maxHeaderPx);
+      }
+      const rectHeight = requestedStyle === 'reference'
+        ? headerHeight
+        : (attributionY - mainTextTop) + padding * 1.5;
       const textCenterX = sideMargin + (textAreaWidth / 2);
       const rectX = 0;
       const rectWidth = videoWidth;
 
       // 3. Map wrapped text to <tspan> elements, sanitizing each line
-      const textLines = wrappedText.map((line, index) => {
+      const textLines = linesToRender.map((line, index) => {
         const y = mainTextTop + (index * (lineSpacing));
         return `<tspan x="${textCenterX}" y="${y}">${sanitizeForSvg(line)}</tspan>`;
       }).join('');
