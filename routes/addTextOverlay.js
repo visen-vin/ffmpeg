@@ -99,9 +99,9 @@ module.exports = (app, upload) => {
       // Positioning varies by style
       const lineSpacing = fontSize + 10;
       const baseDarkTop = 1200;
-      // For 'reference' (white) style, add safe top padding:
-      // 15% for 1–3 lines, 10% for 4–5 lines
-      const topPaddingRatio = lineCount >= 4 ? 0.10 : 0.15;
+      // Apply fixed overlay padding: 10% top and 2.5% bottom for 'reference' style
+      const topPaddingRatio = 0.10;
+      const bottomPaddingRatio = 0.025;
       // Header height will be computed from actual text block height later (capped at 32%)
       let headerHeight = 0;
       const mainTextTop = requestedStyle === 'reference'
@@ -117,7 +117,8 @@ module.exports = (app, upload) => {
       if (requestedStyle === 'reference') {
         const textBottomMargin = Math.round(fontSize * 0.2);
         const attrBottomMargin = Math.round(attrFontSize * 0.4);
-        const headerHeightPxRaw = attributionY + attrBottomMargin; // include attribution within header measurement
+        const bottomPaddingPx = Math.round(videoHeight * bottomPaddingRatio);
+        const headerHeightPxRaw = attributionY + attrBottomMargin + bottomPaddingPx; // include attribution and bottom padding
         const maxHeaderPx = Math.round(videoHeight * 0.32);
         headerHeight = Math.min(headerHeightPxRaw, maxHeaderPx);
         // Clamp attribution to sit inside the header when capped
@@ -172,10 +173,21 @@ module.exports = (app, upload) => {
       let enableClause = '';
 
       await new Promise((resolve, reject) => {
+        // When using the 'reference' style, push the video content down by the
+        // computed header height so the video starts at the bottom of the overlay.
+        // We do this by cropping off the bottom "headerHeight" pixels and then
+        // padding them back on the top as black, which preserves the final canvas
+        // size while creating a visual top margin equal to the overlay height.
+        const cropPadChain = requestedStyle === 'reference'
+          ? `[0:v]crop=${videoWidth}:${Math.max(1, videoHeight - headerHeight)}:0:0,` +
+            `pad=${videoWidth}:${videoHeight}:0:${headerHeight}:black[vidBase];` +
+            `[vidBase][1:v]overlay=(W-w)/2:(H-h)/2${enableClause}`
+          : `[0:v][1:v]overlay=(W-w)/2:(H-h)/2${enableClause}`;
+
         ffmpeg()
           .input(inputPath)
           .input(textImage)
-          .complexFilter(`[0:v][1:v] overlay=(W-w)/2:(H-h)/2${enableClause}`)
+          .complexFilter(cropPadChain)
           .outputOptions(['-c:a copy'])
           .on('progress', (progress) => {
             const percent = Math.round(progress.percent || 0);
@@ -199,7 +211,7 @@ module.exports = (app, upload) => {
         text: textWithEmojis,
         attribution: attributionWithEmojis,
         video: { width: videoWidth, height: videoHeight, durationSec },
-        layout: { fontSize, lineSpacing, mainTextTop, attributionY, rectY, rectHeight, sideMargin, textAreaWidth },
+        layout: { fontSize, lineSpacing, mainTextTop, attributionY, rectY, rectHeight, sideMargin, textAreaWidth, headerHeight },
         input: { source: inputSource, path: inputPath, inputFilename: req.file ? undefined : inputFilename, originalName: req.file ? req.file.originalname : undefined },
         output: { outputFilename }
       };

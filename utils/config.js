@@ -4,7 +4,7 @@ const fs = require('fs');
 const ROOT_DIR = __dirname.replace(/\/(utils)$/, '');
 const UPLOADS_DIR = path.join(ROOT_DIR, 'uploads');
 const OUTPUTS_DIR = path.join(ROOT_DIR, 'outputs');
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const DEFAULTS = {
     duration: 10,
     width: 1920,
