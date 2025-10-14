@@ -77,6 +77,7 @@ module.exports = (app, upload) => {
       const sideMargin = requestedStyle === 'reference' ? videoWidth * 0.08 : videoWidth * 0.15;
       const textAreaWidth = videoWidth - (2 * sideMargin);
       const fontSize = requestedStyle === 'reference' ? Math.round(textAreaWidth / 19) : Math.round(textAreaWidth / 20);
+      const attrFontSize = Math.round(fontSize * 0.8);
       const maxCharsPerLine = Math.floor(textAreaWidth / (fontSize * 0.6));
 
       // 1. Wrap the text that now contains real emojis
@@ -98,24 +99,29 @@ module.exports = (app, upload) => {
       // Positioning varies by style
       const lineSpacing = fontSize + 10;
       const baseDarkTop = 1200;
-      // For 'reference' (white) style, add a safe top padding of 15% of video height
-      const topPaddingRatio = 0.10;
+      // For 'reference' (white) style, add safe top padding:
+      // 15% for 1–3 lines, 10% for 4–5 lines
+      const topPaddingRatio = lineCount >= 4 ? 0.10 : 0.15;
       // Header height will be computed from actual text block height later (capped at 32%)
       let headerHeight = 0;
       const mainTextTop = requestedStyle === 'reference'
         ? Math.round(videoHeight * topPaddingRatio)
         : Math.round((baseDarkTop * (videoHeight / 1920)) - fontSize);
-      const lastLineY = mainTextTop + ((lineCount - 1) * lineSpacing) + fontSize; // approximate bottom of last line
-      // Revert: attribution gap returns to prior behavior (fontSize + 24)
-      const attributionY = lastLineY + (fontSize + 15);
+      const lastLineY = mainTextTop + ((lineCount ) * lineSpacing) + fontSize - 10; // approximate bottom of last line
+      // Compact attribution gap (halved): decrease spacing between text and attribution
+      const attrGap = Math.round(fontSize * 0.25);
+      let attributionY = lastLineY + attrGap;
       const padding = Math.round(fontSize * 0.6);
       // Keep white bar anchored at the very top; only text gets top padding
       const rectY = requestedStyle === 'reference' ? 0 : (mainTextTop - padding);
       if (requestedStyle === 'reference') {
         const textBottomMargin = Math.round(fontSize * 0.2);
-        const headerHeightPxRaw = lastLineY + textBottomMargin; // includes top padding via mainTextTop
+        const attrBottomMargin = Math.round(attrFontSize * 0.4);
+        const headerHeightPxRaw = attributionY + attrBottomMargin; // include attribution within header measurement
         const maxHeaderPx = Math.round(videoHeight * 0.32);
         headerHeight = Math.min(headerHeightPxRaw, maxHeaderPx);
+        // Clamp attribution to sit inside the header when capped
+        attributionY = Math.min(attributionY, headerHeight - attrBottomMargin);
       }
       const rectHeight = requestedStyle === 'reference'
         ? headerHeight
@@ -138,7 +144,7 @@ module.exports = (app, upload) => {
           <style>
             ${requestedStyle === 'reference' ? `
               .main-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${fontSize}px; font-weight: normal; fill: black; text-anchor: middle; }
-              .attr-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${Math.round(fontSize * 0.8)}px; font-weight: bold; fill: #D64A27; text-anchor: middle; }
+              .attr-text { font-family: "Georgia", "Times New Roman", serif; font-size: ${attrFontSize}px; font-weight: bold; fill: #D64A27; text-anchor: middle; }
             ` : `
               .main-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${fontSize}px; font-weight: bold; fill: white; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8)); }
               .attr-text { font-family: "Roboto", "Noto Color Emoji"; font-size: ${Math.round(fontSize * 0.7)}px; font-weight: bold; fill: #FFA500; text-anchor: middle; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.7)); }
